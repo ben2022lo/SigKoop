@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import signatory
 import matplotlib.pyplot as plt
-
+from matplotlib.ticker import ScalarFormatter
 
 class SigKoop():
     def __init__(self, X, win, depth):
@@ -104,21 +104,6 @@ class SigKoop():
 
         # Predict X_{t+1} = X_t + Δ_pred
         X_pred = X_first + delta_pred
-        
-        fig, axs = plt.subplots(1, 2, figsize=(12, 5))      
-        for trajectory in X_pred:
-            axs[0].plot(trajectory[:, 0], trajectory[:, 1], alpha=0.5)
-        axs[0].set_xlabel("x")
-        axs[0].set_ylabel("x'")
-        axs[0].set_title("Phase Portrait (prediction)")
-        axs[0].grid()
-        for trajectory in X_last:
-            axs[1].plot(trajectory[:, 0], trajectory[:, 1], alpha=0.5)
-        axs[1].set_xlabel("x")
-        axs[1].set_ylabel("x'")
-        axs[1].set_title("Phase Portrait (true)")
-        axs[1].grid()
-        plt.show()
 
         # Compute MSE
         mse = ((X_pred - X_last) ** 2).mean(dim=2)  # (M, self.num_windows)
@@ -126,39 +111,93 @@ class SigKoop():
         mse_per_traj = mse.mean(dim=1)  # (M,)
         mse_per_time = mse.mean(dim=0)  # (self.num_windows,)
         overall_mse = mse.mean()        # scalar
-
-        return mse_per_traj, mse_per_time, overall_mse
-    def error_traj_distributions(self, err_traj_train, err_traj_test):
-        fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-        # Plot error per trajectory
-        axs[0].hist(err_traj_train.cpu().numpy(), bins=30, color='skyblue', edgecolor='black')
-        axs[0].set_title("Train error per Trajectory")
-        axs[0].set_xlabel("MSE")
-        axs[0].set_ylabel("Count")
-        # Plot error per trajectory
-        axs[1].hist(err_traj_test.cpu().numpy(), bins=30, color='skyblue', edgecolor='black')
-        axs[1].set_title("Test error per Trajectory")
-        axs[1].set_xlabel("MSE")
-        axs[1].set_ylabel("Count")
         
+        #### visulization
+        fontsize = 20
+        fig, axs = plt.subplots(1, 2, figsize=(12, 5))      
+        for trajectory in X_pred:
+            axs[0].plot(trajectory[:, 0], trajectory[:, 1], alpha=0.5)
+        axs[0].set_xlabel("x", fontsize=fontsize)
+        axs[0].set_ylabel("x'", fontsize=fontsize)
+        #axs[0].set_title("Phase Portrait (prediction)")
+        axs[0].tick_params(axis='both', labelsize=fontsize)
+
+
+        for trajectory in X_last:
+            axs[1].plot(trajectory[:, 0], trajectory[:, 1], alpha=0.5)
+        axs[1].set_xlabel("x", fontsize=fontsize)
+        axs[1].set_ylabel("x'", fontsize=fontsize)
+        axs[1].tick_params(axis='both', labelsize=fontsize)
+        #axs[1].set_title("Phase Portrait (true)")
+
         plt.tight_layout()
         plt.show()
+        
+        return mse_per_traj, mse_per_time, overall_mse
+    def error_traj_distributions(self, err_traj_train, err_traj_test):
+        bins=30
+        fontsize = 20
+        train_np = err_traj_train.cpu().numpy()
+        test_np = err_traj_test.cpu().numpy()
+    
+        # Trouver les bornes de bacs communes
+        all_data = np.concatenate([train_np, test_np])
+        bin_edges = np.histogram_bin_edges(all_data, bins=bins)
+    
+        fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+    
+        axs[0].hist(train_np, bins=bin_edges, color='skyblue', edgecolor='black', density=True)
+        #axs[0].set_title("Distribution of trajectory-wise train error")
+        axs[0].set_xlabel("MSE", fontsize=fontsize)
+        axs[0].set_ylabel("Density", fontsize=fontsize)
+    
+        axs[1].hist(test_np, bins=bin_edges, color='salmon', edgecolor='black', density=True)
+        #axs[1].set_title("Distribution of trajectory-wise test error")
+        axs[1].set_xlabel("MSE", fontsize=fontsize)
+        axs[1].set_ylabel("Density", fontsize=fontsize)
+    
+        # Forcer les mêmes limites
+        x_min = bin_edges[0]
+        x_max = bin_edges[-1]
+        y_min = min(ax.get_ylim()[0] for ax in axs)
+        y_max = max(ax.get_ylim()[1] for ax in axs)
+    
+        for ax in axs:
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+            ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax.tick_params(axis='both', labelsize=fontsize)
+            ax.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
+            ax.get_xaxis().get_offset_text().set_fontsize(fontsize)
+            ax.get_yaxis().get_offset_text().set_fontsize(fontsize)
+        plt.tight_layout()
+        plt.show()
+
 
     def error_time_distributions(self, err_time_train, err_time_test):
         fig, axs = plt.subplots(1, 2, figsize=(12, 5))
 
         # Plot error per time step
         axs[0].plot(err_time_train.cpu().numpy(), marker='o', linestyle='-', color='orange')
-        axs[0].set_title("Train error per Time Step")
+        #axs[0].set_title("Train error per Time Step")
         axs[0].set_xlabel("Time Step")
         axs[0].set_ylabel("MSE")
 
         # Plot error per time step
         axs[1].plot(err_time_test.cpu().numpy(), marker='o', linestyle='-', color='orange')
-        axs[1].set_title("Test error per Time Step")
+        #axs[1].set_title("Test error per Time Step")
         axs[1].set_xlabel("Time Step")
         axs[1].set_ylabel("MSE")
-
+        x_min = min(axs[0].get_xlim()[0], axs[1].get_xlim()[0])
+        x_max = max(axs[0].get_xlim()[1], axs[1].get_xlim()[1])
+        y_min = min(axs[0].get_ylim()[0], axs[1].get_ylim()[0])
+        y_max = max(axs[0].get_ylim()[1], axs[1].get_ylim()[1])
+        
+        for ax in axs:
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+            ax.grid(True)
         plt.tight_layout()
         plt.show()
 
